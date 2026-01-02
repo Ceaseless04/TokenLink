@@ -15,6 +15,20 @@ router.post('/', async (req: Request, res: Response) => {
   }
 });
 
+// Basic RSVP endpoint (simple upsert). Capacity enforcement and atomic checks will be implemented in a later step.
+router.post('/:id/rsvp', async (req: Request, res: Response) => {
+  const event_id = req.params.id;
+  const { attendee_id, status = 'going', guests = 0 } = req.body;
+  if (!attendee_id) return res.status(400).json({ error: 'attendee_id required' });
+  try {
+    const { data, error } = await supabaseAdmin.from('event_attendees').upsert({ event_id, attendee_id, status, guests }, { onConflict: 'event_id,attendee_id' }).select().single();
+    if (error) return res.status(400).json({ error: error.message });
+    res.status(201).json({ rsvp: data });
+  } catch (err) {
+    res.status(500).json({ error: 'internal' });
+  }
+});
+
 router.get('/:id', async (req: Request, res: Response) => {
   const id = req.params.id;
   const { data, error } = await supabaseAdmin.from('events').select('*').eq('id', id).single();

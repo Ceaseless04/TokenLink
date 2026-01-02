@@ -5,7 +5,7 @@ const mockOrg = { id: 'org-1', user_id: 'user-1', name: 'Test Org', description:
 
 jest.mock('../supabaseClient', () => {
   const fromMock = (table: string) => ({
-    insert: jest.fn(async (payload: any) => ({ data: { ...mockOrg, ...payload[0] }, error: null })),
+    insert: jest.fn((payload: any) => ({ select: jest.fn(() => ({ single: jest.fn(async () => ({ data: { ...mockOrg, ...payload[0] }, error: null })) })) })),
     select: jest.fn(() => ({ eq: jest.fn(() => ({ single: jest.fn(async () => ({ data: mockOrg, error: null })) })) })),
     update: jest.fn(() => ({ eq: jest.fn(() => ({ select: jest.fn(async () => ({ data: mockOrg, error: null }) ) })) })),
     delete: jest.fn(() => ({ eq: jest.fn(async () => ({ error: null })) }))
