@@ -1,16 +1,16 @@
 # backend-express (Express + TypeScript + Supabase Auth) 🚀
 
-A small Express + TypeScript backend that demonstrates how to integrate Supabase Auth and use the Supabase JS client (`@supabase/supabase-js`) for server-side database operations. It provides a lightweight API for users, organizations (clubs), organization memberships, attendees (students), events, and basic RSVP handling.
+A small Express + TypeScript backend demonstrating Supabase Auth and `@supabase/supabase-js` for server-side DB operations. Provides a lightweight API for users, organizations (clubs), memberships, attendees (students), events, and basic RSVP handling.
 
 ---
 
-## Quickstart ⚡
+## Quickstart — run & test locally ⚡
 
-1. Copy environment variables:
+1. Copy environment variables and edit:
 
 ```bash
 cp .env.example .env
-# then edit .env and set your Supabase credentials
+# then edit .env and set your SupABASE credentials and PORT if needed
 ```
 
 2. Install dependencies:
@@ -19,13 +19,13 @@ cp .env.example .env
 npm install
 ```
 
-3. Run in development mode:
+3. Start in development mode (hot reload):
 
 ```bash
 npm run dev
 ```
 
-4. Run tests:
+4. Run tests (includes OpenAPI validation test):
 
 ```bash
 npm test
@@ -37,94 +37,165 @@ npm test
 
 - `SUPABASE_URL` — Your Supabase project URL
 - `SUPABASE_ANON_KEY` — Public anon key (used for non-admin actions)
-- `SUPABASE_SERVICE_ROLE_KEY` — Service role key (admin access). **Never expose this key in the browser or public repos.**
+- `SUPABASE_SERVICE_ROLE_KEY` — Service role key (admin access). **Never commit this key.**
 - `PORT` — Optional, defaults to `4000`
+- `EXPOSE_API_DOCS` — Set to `true` to expose `/api-docs` in production (default: disabled)
+- `SWAGGER_SERVER_URL` — Optional override for the server URL shown in the OpenAPI spec
 
-The server creates two clients in `src/supabaseClient.ts`:
-- `supabase` (anon client)
-- `supabaseAdmin` (service role client, falls back to anon if service key not provided)
-
-> The admin client is used server-side to read/write database tables and to validate tokens.
-
----
-
-## API Endpoints 📚
-
-All routes are mounted under `/api`.
-
-- `GET /api/health` — Health check, returns `{ status: 'ok' }`.
-
-Auth
-- `GET /api/auth/me` — Protected route; requires `Authorization: Bearer <access_token>` and returns the Supabase user object (validated using `supabaseAdmin.auth.getUser`).
-
-Users
-- `POST /api/users` — Create a user record linked to a Supabase user (fields: `email`, `supabaseId`)
-- `GET /api/users/:id` — Read user by id
-- `PUT /api/users/:id` — Update user
-- `DELETE /api/users/:id` — Delete user
-
-Organizations
-- `POST /api/organizations` — Create an organization (club)
-- `GET /api/organizations/:id` — Read organization
-- `PUT /api/organizations/:id` — Update organization
-- `DELETE /api/organizations/:id` — Delete organization
-
-Organization Members
-- `POST /api/organization_members` — Add member to organization (fields: `organization_id`, `user_id`, `role`)
-- `GET /api/organization_members/:id` — Read membership
-- `PUT /api/organization_members/:id` — Update membership
-- `DELETE /api/organization_members/:id` — Remove membership
-
-Attendees
-- `POST /api/attendees` — Create attendee (student) record
-- `GET /api/attendees/:id` — Read attendee
-- `PUT /api/attendees/:id` — Update attendee
-- `DELETE /api/attendees/:id` — Delete attendee
-
-Events
-- `POST /api/events` — Create event
-- `POST /api/events/:id/rsvp` — RSVP / upsert attendance for an event (basic upsert, no atomic capacity enforcement yet)
-- `GET /api/events/:id` — Read event
-- `PUT /api/events/:id` — Update event
-- `DELETE /api/events/:id` — Delete event
-
-Authentication
-- Protected endpoints expect an `Authorization: Bearer <access_token>` header. The middleware `supabaseAuth` validates the token via `supabaseAdmin.auth.getUser(token)` and attaches the Supabase user to `req.supabaseUser`.
+The server creates these clients in `src/supabaseClient.ts`:
+- `supabase` (anon)
+- `supabaseAdmin` (service role; falls back to anon if not provided)
 
 ---
 
-## Database / Migrations 🗄️
+## Development & API docs (Swagger) 📖🔧
 
-This project does not embed an ORM. Instead, the database schema is defined via SQL migrations in the `migrations/` folder. These are intended for use with Postgres (Supabase).
+- Swagger UI is available at: `http://localhost:4000/api-docs` (mounted only when `NODE_ENV !== 'production'`, unless `EXPOSE_API_DOCS=true`).
+- Raw OpenAPI JSON: `http://localhost:4000/api-docs.json`
+- Spec file: `src/swagger.ts` — edit/add path definitions or switch to auto-generated docs via JSDoc + `swagger-jsdoc`.
 
-Key migration files:
-- `001_create_tables.sql` — `users`, `organizations`, `attendees`, `events` tables
-- `002_create_event_attendees.sql` — `event_attendees` table and `set_updated_at` trigger
-- `003_create_organization_members.sql` — `organization_members` table
+### Testing protected routes in Swagger UI (step-by-step) 🔐
 
-Apply these either via the Supabase SQL editor or `psql` against your database.
+1. Create or use an existing Supabase user (via Supabase dashboard or admin endpoint).
+   - Example admin create (replace `<PROJECT>` and service role key):
+
+```bash
+curl -X POST "https://<PROJECT>.supabase.co/auth/v1/admin/users" \
+  -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@example.com","password":"pass123"}'
+```
+
+2. Exchange credentials for an access token (get `access_token`):
+
+```bash
+curl -X POST "https://<PROJECT>.supabase.co/auth/v1/token?grant_type=password" \
+  -H "apikey: $SUPABASE_ANON_KEY" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "email=test@example.com&password=pass123"
+```
+
+3. Open `http://localhost:4000/api-docs` and click the **Authorize** button in Swagger UI. Paste the token as `Bearer <access_token>` and click *Authorize*.
+
+4. Test protected endpoints directly in Swagger UI (e.g., `POST /api/organizations`, `POST /api/events`, `POST /api/events/{id}/rsvp`). The Bearer token will be sent automatically with requests.
+
+### Example flow to test the app (Swagger or curl)
+
+1. Create organization (requires auth):
+
+```json
+POST /api/organizations
+{
+  "name": "Chess Club",
+  "slug": "chess-club"
+}
+```
+
+2. Create an attendee for the current auth user:
+
+```json
+POST /api/attendees
+{
+  "first_name": "Alice",
+  "last_name": "A"
+}
+```
+
+3. Create an event under the organization (requires an organizer role):
+
+```json
+POST /api/events
+{
+  "club_id": "<org_id>",
+  "title": "Weekly Meetup",
+  "start_time": "2026-01-20T18:00:00Z",
+  "end_time": "2026-01-20T20:00:00Z"
+}
+```
+
+4. RSVP to the event:
+
+```json
+POST /api/events/{id}/rsvp
+{
+  "attendee_id": "<attendee_id>",
+  "status": "going"
+}
+```
+
+> Tip: Use Swagger UI to run these sequences quickly — responses and request bodies are interactive.
 
 ---
 
-## Testing 🧪
+## Testing & validation 🧪
 
-Tests live under `src/__tests__/` and use `jest` + `supertest`.
-
-Run:
+- Run the full test suite:
 
 ```bash
 npm test
 ```
 
-The tests mock or simulate Supabase responses (see individual test files) to validate routing and business logic.
+- Run only the OpenAPI validation test (useful after editing `src/swagger.ts`):
+
+```bash
+npx jest src/__tests__/openapi.test.ts -i
+```
+
+- Validate the OpenAPI JSON manually with `swagger-cli` or `swagger-parser`:
+
+```bash
+npm install -g @apidevtools/swagger-cli
+swagger-cli validate ./src/swagger.ts
+```
+
+or programmatically (the repository includes a Jest test that calls `swagger-parser`).
+
+---
+
+## API Endpoints (summary) 📚
+
+All routes are mounted under `/api`.
+
+**Auth**
+- `GET /api/auth/me` — Protected; requires `Authorization: Bearer <access_token>` and returns the Supabase user object.
+
+**Users**
+- `POST /api/users`
+- `GET /api/users/:id`
+- `PUT /api/users/:id`
+- `DELETE /api/users/:id`
+
+**Organizations**
+- `POST /api/organizations`
+- `GET /api/organizations/:id`
+- `PUT /api/organizations/:id`
+- `DELETE /api/organizations/:id`
+
+**Organization Members**
+- `POST /api/organization_members`
+- `GET /api/organization_members/:id`
+- `PUT /api/organization_members/:id`
+- `DELETE /api/organization_members/:id`
+
+**Attendees**
+- `POST /api/attendees`
+- `GET /api/attendees/:id`
+- `PUT /api/attendees/:id`
+- `DELETE /api/attendees/:id`
+
+**Events**
+- `POST /api/events`
+- `POST /api/events/:id/rsvp`
+- `GET /api/events/:id`
+- `PUT /api/events/:id`
+- `DELETE /api/events/:id`
 
 ---
 
 ## Implementation notes & TODOs 📝
 
-- RSVP endpoint currently performs a simple `upsert` into `event_attendees`; capacity enforcement, waitlists, and atomic reservation checking should be implemented in the database (transactions) or with row-level locking for production readiness.
-- The server uses `supabaseAdmin` to perform all read/write operations; take care to keep the `SERVICE_ROLE` key secret.
-- If you prefer an ORM (Prisma/TypeORM), this project can be extended to use one, but it intentionally keeps DB logic minimal and close to the migrations.
+- The RSVP endpoint is a simple `upsert` into `event_attendees`; production readiness would require atomic reservation logic, waitlists, and capacity enforcement in the DB.
+- Consider migrating to JSDoc + `swagger-jsdoc` for auto-generated OpenAPI specs derived from route JSDoc comments (helps docs stay in sync with code).
 
 ---
 
@@ -136,38 +207,3 @@ The tests mock or simulate Supabase responses (see individual test files) to val
 - `npm test` — run unit/integration tests
 
 ---
-
-## Contributing & License
-
-Contributions are welcome — please open issues or PRs. See the top-level `LICENSE` for licensing details.
-
----
-
-If you'd like, I can also add example curl commands for each endpoint or update tests to cover outstanding edge-cases. 💡
-
----
-
-## Testing with Postman (quick guide) 🧭
-
-1. Create a Supabase auth user (service role) or sign up via your frontend.
-   - Admin create: POST `https://<PROJECT>.supabase.co/auth/v1/admin/users` with `Authorization: Bearer <SERVICE_ROLE_KEY>` and body `{ "email": "test@example.com", "password": "pass123" }`.
-2. Sign in to get an access token:
-   - POST `https://<PROJECT>.supabase.co/auth/v1/token?grant_type=password` with `apikey: <ANON_KEY>` and form `email=test@example.com&password=pass123`. Save `access_token` from the response.
-3. In Postman set header `Authorization: Bearer {{access_token}}`.
-4. Sequence to test the flow:
-   - POST `/api/organizations` { "name": "Club", "slug": "club" } — creates org as authenticated user.
-   - POST `/api/attendees` { "first_name": "Alice", "last_name": "A" } — creates attendee for authenticated user.
-   - POST `/api/events` { "club_id": "<org_id>", "title": "Meet", "start_time": "...", "end_time": "..." } — requires organizer role.
-   - POST `/api/events/:id/rsvp` { "attendee_id": "<attendee_id>", "status": "going" } — attendee must belong to authenticated user.
-
-Use Postman environment variables for `{{access_token}}`, `{{org_id}}`, `{{attendee_id}}`, etc., to simplify testing.
-
-
-## API Docs (Swagger UI) ✅
-
-After starting the dev server (`npm run dev`), open:
-
-- UI: http://localhost:4000/docs
-- Raw OpenAPI JSON: http://localhost:4000/docs.json
-
-To test protected endpoints, click **Authorize** in the Swagger UI and paste your access token as `Bearer <your_access_token>` (include the `Bearer ` prefix).
