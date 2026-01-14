@@ -5,6 +5,8 @@
     "rootDir": "src",
     "outDir": "dist",
     "strict": true,
+    "resolveJsonModule": true,
+    "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true

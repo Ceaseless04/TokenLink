@@ -1,9 +1,12 @@
 import { Request, Response, Router } from 'express';
+import { attachLocalUser } from '../middleware/attachLocalUser';
+import { requireOrgRole } from '../middleware/requireOrgRole';
+import { supabaseAuth } from '../middleware/supabaseAuth';
 import { supabaseAdmin } from '../supabaseClient';
 
 const router = Router();
 
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', supabaseAuth, attachLocalUser, requireOrgRole({ body: 'organization_id' }, ['organizer','admin']), async (req: Request, res: Response) => {
   const { organization_id, user_id, role = 'member' } = req.body;
   if (!organization_id || !user_id) return res.status(400).json({ error: 'organization_id and user_id required' });
   try {

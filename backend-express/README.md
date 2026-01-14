@@ -144,3 +144,30 @@ Contributions are welcome — please open issues or PRs. See the top-level `LICE
 ---
 
 If you'd like, I can also add example curl commands for each endpoint or update tests to cover outstanding edge-cases. 💡
+
+---
+
+## Testing with Postman (quick guide) 🧭
+
+1. Create a Supabase auth user (service role) or sign up via your frontend.
+   - Admin create: POST `https://<PROJECT>.supabase.co/auth/v1/admin/users` with `Authorization: Bearer <SERVICE_ROLE_KEY>` and body `{ "email": "test@example.com", "password": "pass123" }`.
+2. Sign in to get an access token:
+   - POST `https://<PROJECT>.supabase.co/auth/v1/token?grant_type=password` with `apikey: <ANON_KEY>` and form `email=test@example.com&password=pass123`. Save `access_token` from the response.
+3. In Postman set header `Authorization: Bearer {{access_token}}`.
+4. Sequence to test the flow:
+   - POST `/api/organizations` { "name": "Club", "slug": "club" } — creates org as authenticated user.
+   - POST `/api/attendees` { "first_name": "Alice", "last_name": "A" } — creates attendee for authenticated user.
+   - POST `/api/events` { "club_id": "<org_id>", "title": "Meet", "start_time": "...", "end_time": "..." } — requires organizer role.
+   - POST `/api/events/:id/rsvp` { "attendee_id": "<attendee_id>", "status": "going" } — attendee must belong to authenticated user.
+
+Use Postman environment variables for `{{access_token}}`, `{{org_id}}`, `{{attendee_id}}`, etc., to simplify testing.
+
+
+## API Docs (Swagger UI) ✅
+
+After starting the dev server (`npm run dev`), open:
+
+- UI: http://localhost:4000/docs
+- Raw OpenAPI JSON: http://localhost:4000/docs.json
+
+To test protected endpoints, click **Authorize** in the Swagger UI and paste your access token as `Bearer <your_access_token>` (include the `Bearer ` prefix).

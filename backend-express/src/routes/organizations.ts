@@ -1,13 +1,16 @@
 import { Request, Response, Router } from 'express';
+import { attachLocalUser } from '../middleware/attachLocalUser';
+import { supabaseAuth } from '../middleware/supabaseAuth';
 import { supabaseAdmin } from '../supabaseClient';
 
 const router = Router();
 
-router.post('/', async (req: Request, res: Response) => {
-  const { user_id, name, description, slug } = req.body;
-  if (!user_id || !name) return res.status(400).json({ error: 'user_id and name required' });
+router.post('/', supabaseAuth, attachLocalUser, async (req: Request, res: Response) => {
+  const localUser = (req as any).localUser;
+  const { name, description, slug } = req.body;
+  if (!localUser || !name) return res.status(400).json({ error: 'name required' });
   try {
-    const { data, error } = await supabaseAdmin.from('organizations').insert({ user_id, name, description, slug }).select().single();
+    const { data, error } = await supabaseAdmin.from('organizations').insert({ user_id: localUser.id, name, description, slug }).select().single();
     if (error) return res.status(400).json({ error: error.message });
     res.status(201).json({ organization: data });
   } catch (err) {

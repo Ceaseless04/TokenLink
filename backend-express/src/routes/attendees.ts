@@ -3,11 +3,15 @@ import { supabaseAdmin } from '../supabaseClient';
 
 const router = Router();
 
-router.post('/', async (req: Request, res: Response) => {
-  const { user_id, first_name, last_name } = req.body;
-  if (!user_id || !first_name || !last_name) return res.status(400).json({ error: 'user_id, first_name, last_name required' });
+import { attachLocalUser } from '../middleware/attachLocalUser';
+import { supabaseAuth } from '../middleware/supabaseAuth';
+
+router.post('/', supabaseAuth, attachLocalUser, async (req: Request, res: Response) => {
+  const { first_name, last_name } = req.body;
+  const localUser = (req as any).localUser;
+  if (!localUser || !first_name || !last_name) return res.status(400).json({ error: 'first_name and last_name required' });
   try {
-    const { data, error } = await supabaseAdmin.from('attendees').insert({ user_id, first_name, last_name }).select().single();
+    const { data, error } = await supabaseAdmin.from('attendees').insert({ user_id: localUser.id, first_name, last_name }).select().single();
     if (error) return res.status(400).json({ error: error.message });
     res.status(201).json({ attendee: data });
   } catch (err) {
