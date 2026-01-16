@@ -9,6 +9,7 @@ A small Express + TypeScript backend that demonstrates how to integrate Supabase
 1. Copy environment variables:
 
 ```bash
+cd backend-express
 cp .env.example .env
 # then edit .env and set your Supabase credentials
 ```
