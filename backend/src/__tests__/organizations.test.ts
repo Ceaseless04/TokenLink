@@ -1,0 +1,42 @@
+import request from 'supertest';
+import app from '../app';
+
+// Mock auth and attachLocalUser middleware used by protected routes
+jest.mock('../middleware/supabaseAuth', () => ({
+  supabaseAuth: jest.fn((req: any, _res: any, next: any) => {
+    req.supabaseUser = { id: 'auth-user-1', email: 'a@b.com' };
+    next();
+  })
+}));
+jest.mock('../middleware/attachLocalUser', () => ({
+  attachLocalUser: jest.fn((req: any, _res: any, next: any) => {
+    req.localUser = { id: 'user-1' };
+    next();
+  })
+}));
+
+const mockOrg = { id: 'org-1', user_id: 'user-1', name: 'Test Org', description: 'desc', slug: 'test-org' };
+
+jest.mock('../supabaseClient', () => {
+  const fromMock = (table: string) => ({
+    insert: jest.fn((payload: any) => ({ select: jest.fn(() => ({ single: jest.fn(async () => ({ data: { ...mockOrg, ...payload[0] }, error: null })) })) })),
+    select: jest.fn(() => ({ eq: jest.fn(() => ({ single: jest.fn(async () => ({ data: mockOrg, error: null })) })) })),
+    update: jest.fn(() => ({ eq: jest.fn(() => ({ select: jest.fn(async () => ({ data: mockOrg, error: null }) ) })) })),
+    delete: jest.fn(() => ({ eq: jest.fn(async () => ({ error: null })) }))
+  });
+  return { supabaseAdmin: { from: fromMock } };
+});
+
+describe('Organizations CRUD routes', () => {
+  it('creates an organization', async () => {
+    const res = await request(app).post('/api/organizations').send({ user_id: 'user-1', name: 'Test Org', description: 'desc', slug: 'test-org' });
+    expect(res.status).toBe(201);
+    expect(res.body.organization).toMatchObject({ name: 'Test Org' });
+  });
+
+  it('gets organization by id', async () => {
+    const res = await request(app).get('/api/organizations/org-1');
+    expect(res.status).toBe(200);
+    expect(res.body.organization).toMatchObject({ id: 'org-1' });
+  });
+});
